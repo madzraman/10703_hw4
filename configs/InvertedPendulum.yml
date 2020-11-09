@@ -1,0 +1,28 @@
+train_kwargs:
+  enable_MBPO: false
+  policy: TD3 
+  env_name: InvertedPendulumBulletEnv-v0
+  seed: 0
+  load_model: ''
+  max_timesteps: 1000000
+  start_timesteps: 2500
+  batch_size: 256
+  eval_freq: 2500
+  save_model: false
+  expl_noise: 0.1
+  model_rollout_batch_size: 250
+  num_rollouts_per_step: 400
+  rollout_horizon: 1
+  model_update_freq: 5000
+  num_gradient_updates: 20
+  percentage_real_transition: 0.2 
+TD3_kwargs:
+  discount: 0.99
+  tau: 0.005
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_freq: 2
+model_kwargs:
+  num_networks: 7
+  num_elites: 5
+  model_lr: 0.001
