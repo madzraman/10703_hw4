@@ -242,45 +242,18 @@ class MBPO:
 
             # Real
             state_e, action_e, next_state_e, reward_e, not_done_e = self.replay_buffer_Env.sample(real_number)
-            # real_ind = np.expand_dims(np.random.choice(list(range(self.replay_buffer_Env.max_size)), real_number, replace=  False), axis = 0)
-            # real_ind = np.transpose(real_ind)
-            # real_state = np.take_along_axis(self.replay_buffer_Env.state, real_ind, axis = 0)
-            # real_action = np.take_along_axis(self.replay_buffer_Env.action, real_ind, axis = 0)
-            # real_next_state = np.take_along_axis(self.replay_buffer_Env.next_state, real_ind, axis = 0)
-            # real_reward = np.take_along_axis(self.replay_buffer_Env.reward, real_ind, axis = 0)
-            # real_not_done = np.take_along_axis(self.replay_buffer_Env.not_done, real_ind, axis = 0)
 
             # model 
             state_m, action_m, next_state_m, reward_m, not_done_m = self.replay_buffer_Model.sample(model_number)
-            # model_ind = np.expand_dims(np.random.choice(list(range(self.replay_buffer_Model.max_size)), model_number, replace=  False), axis = 0)
-            # model_ind = np.transpose(model_ind)
-            # model_state = np.take_along_axis(self.replay_buffer_Model.state, model_ind, axis = 0)
-            # model_action = np.take_along_axis(self.replay_buffer_Model.action, model_ind, axis = 0)
-            # model_next_state = np.take_along_axis(self.replay_buffer_Model.next_state, model_ind, axis = 0)
-            # model_reward = np.take_along_axis(self.replay_buffer_Model.reward, model_ind, axis = 0)
-            # model_not_done = np.take_along_axis(self.replay_buffer_Model.not_done, model_ind, axis = 0)
-
+      
             # concat
-            state = tf.concat(0, [state_e, state_m])
-            # state = tf.convert_to_tensor(np.concatenate(real_state, model_state, axis=0))
-            # action = tf.convert_to_tensor(np.concatenate(real_action, model_action, axis = 0))
-            # next_state = tf.convert_to_tensor(np.concatenate(real_next_state, model_next_state, axis = 0))
-            # reward = tf.convert_to_tensor(np.concatenate(real_reward, model_reward, axis = 0))
-            # not_done = tf.convert_to_tensor(np.concatenate(real_not_done, model_not_done, axis = 0))
-
+            state = tf.concat([state_e, state_m], 0)
+            action = tf.concat([action_e, action_m], 0)
+            next_state = tf.concat([next_state_e, next_state_m], 0)
+            reward = tf.concat([reward_e, reward_m], 0)
+            not_done = tf.concat([not_done_e, not_done_m], 0)         
 
         else: # not MBPO 
-
-            # ind = np.random.choice(list(range(self.replay_buffer_Env.max_size)), self.batch_size, replace=  False)
-            # # print(np.shape(ind))
-            # # ind = np.transpose(ind)
-            # # print(np.shape(self.replay_buffer_Env.state))
-            # # print(np.shape(ind))
-            # state = tf.convert_to_tensor(self.replay_buffer_Env.state[ind])
-            # action = tf.convert_to_tensor(self.replay_buffer_Env.action[ind])
-            # next_state = tf.convert_to_tensor(self.replay_buffer_Env.next_state[ind])
-            # reward = tf.convert_to_tensor(self.replay_buffer_Env.reward[ind])
-            # not_done = tf.convert_to_tensor(self.replay_buffer_Env.not_done[ind])
             state, action, next_state, reward, not_done = self.replay_buffer_Env.sample(self.batch_size)
         return  state, action, next_state, reward, not_done
 
@@ -304,10 +277,6 @@ class MBPO:
             algo_str = "TD3"
         fig.suptitle("Training Curves for " + algo_str, fontsize=20)
         fig.savefig("./results/training_curve_{}.png".format(algo_str))
-
-
-
-
 
 
 

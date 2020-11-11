@@ -187,7 +187,7 @@ class TD3():
             with tf.GradientTape() as tape_actor: # everything we perform GD on 
                 curr_policy = self.actor.call(state)
                 cond_current_Q = self.critic.Q1(state, curr_policy)
-                actor_loss = -1*tf.math.reduce_mean(cond_current_Q)
+                actor_loss = -tf.math.reduce_mean(cond_current_Q)
             actor_grads = tape_actor.gradient(actor_loss, self.actor.trainable_variables)
             # var = copy.deepcopy(self.actor.trainable_variables)
             self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
