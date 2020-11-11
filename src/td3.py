@@ -7,6 +7,7 @@
 import copy
 import tensorflow as tf
 from tensorflow import keras
+import numpy as np
 
 class Actor(keras.Model):
     '''
@@ -112,7 +113,7 @@ class TD3():
         self.discount = discount
         self.tau = tau
         self.policy_noise = policy_noise
-        self.noise_clip = noise_clip
+        self.noise_clip = noise_clip 
         self.policy_freq = policy_freq
 
         self.total_it = 0
@@ -157,21 +158,51 @@ class TD3():
 
         next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
                                        -self.max_action, self.max_action)
-
         # Compute the target Q value
-
+        critic_Q1, critic_Q2 = tf.stop_gradient(self.critic_target.call(next_state, next_action)) # stop gradient? 
+        min_Q = tf.math.minimum(critic_Q1, critic_Q2) # element wise minimum 
+        Y = tf.math.add(reward, tf.math.scalar_mul(self.discount, min_Q))
+        # Y = reward + (self.discount * min_Q)
+      
         # Get current Q estimates
-
         # Compute critic loss
+        with tf.GradientTape() as tape:
+            current_Q1, current_Q2 = self.critic.call(state, action) # inside to track network for gradient 
+            critic_loss_1 = tf.math.reduce_mean(tf.math.square(Y - current_Q1)) 
+            critic_loss_2 = tf.math.reduce_mean(tf.math.square(Y - current_Q2))
+            # critic_loss_1 = tf.keras.losses.MeanSquaredError(Y, current_Q1)
+            # critic_loss_2 = tf.keras.losses.MeanSquaredError(Y, current_Q2)
+            # print(critic_loss_1, critic_loss_2)
+            critic_loss = critic_loss_1 + critic_loss_2
+        # print("LOSS:", critic_loss)
+        critic_grads = tape.gradient(critic_loss, self.critic.trainable_variables)
+        # print(len(critic_grads))
+        # print(critic_grads)
 
         # Optimize the critic
-
+        self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
+        if self.total_it % self.policy_freq:
         # Delayed policy updates
-
             # Compute actor losses
-
+            with tf.GradientTape() as tape_actor: # everything we perform GD on 
+                curr_policy = self.actor.call(state)
+                cond_current_Q = self.critic.Q1(state, curr_policy)
+                actor_loss = -1*tf.math.reduce_mean(cond_current_Q)
+            actor_grads = tape_actor.gradient(actor_loss, self.actor.trainable_variables)
+            # var = copy.deepcopy(self.actor.trainable_variables)
+            self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
+            # print(np.array(var) - np.array(self.actor.trainable_variables))
+            # print(self.actor.trainable_variables[0])
             # Update the frozen target models
-        raise NotImplementedError
+            # critic: update both Q1 and Q2 in same loop 
+            for (ct,c) in zip(self.critic_target.variables, self.critic.variables):
+                ct.assign(self.tau*c + (1-self.tau)*ct)
+
+            # actor
+            for (at,a) in zip(self.actor_target.variables, self.actor.variables):
+                at.assign(self.tau*a + (1 - self.tau)*at)
+
+        return 
 
 
     def save(self, filename):
