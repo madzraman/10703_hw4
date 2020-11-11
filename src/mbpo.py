@@ -317,21 +317,26 @@ class MBPO:
 
             # Perform action
             new_state, reward, done, info = env.step(action)
+            # print("REWARD:", reward,action, done)
+            episode_reward+= reward
             # Store data in replay buffer
             if not self.enable_MBPO:
                 self.replay_buffer_Env.add(state, action, new_state, reward, done)
             else:
                 raise NotImplementedError
+            state = new_state
  
             
             # Train agent after collecting sufficient data
-            state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
-            self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
+            if t > self.start_timesteps: # ask about this, just for MBPO? 
+                state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
+                self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
 
             # Perform multiple gradient steps per environment step for MBPO
 
 
             if done:
+                print("REWARD:", reward)
                 # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
                 print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
                 # Reset environment

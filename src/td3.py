@@ -159,10 +159,11 @@ class TD3():
         next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
                                        -self.max_action, self.max_action)
         # Compute the target Q value
-        critic_Q1, critic_Q2 = tf.stop_gradient(self.critic_target.call(next_state, next_action)) # stop gradient? 
+        # print(not_done)
+        critic_Q1, critic_Q2 = self.critic_target.call(next_state, next_action) # stop gradient? 
         min_Q = tf.math.minimum(critic_Q1, critic_Q2) # element wise minimum 
-        Y = tf.math.add(reward, tf.math.scalar_mul(self.discount, min_Q))
-        # Y = reward + (self.discount * min_Q)
+        # Y = tf.math.add(reward*not_done, tf.math.scalar_mul(self.discount, min_Q))
+        Y = reward + (not_done * self.discount * min_Q)
       
         # Get current Q estimates
         # Compute critic loss
@@ -182,12 +183,13 @@ class TD3():
         # Optimize the critic
         self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
         if self.total_it % self.policy_freq:
+        #       t       mod     d
         # Delayed policy updates
             # Compute actor losses
             with tf.GradientTape() as tape_actor: # everything we perform GD on 
                 curr_policy = self.actor.call(state)
                 cond_current_Q = self.critic.Q1(state, curr_policy)
-                actor_loss = -tf.math.reduce_mean(cond_current_Q)
+                actor_loss = -tf.math.reduce_mean(cond_current_Q) # negative since we maximize 
             actor_grads = tape_actor.gradient(actor_loss, self.actor.trainable_variables)
             # var = copy.deepcopy(self.actor.trainable_variables)
             self.actor_optimizer.apply_gradients(zip(actor_grads, self.actor.trainable_variables))
@@ -196,11 +198,11 @@ class TD3():
             # Update the frozen target models
             # critic: update both Q1 and Q2 in same loop 
             for (ct,c) in zip(self.critic_target.variables, self.critic.variables):
-                ct.assign(self.tau*c + (1-self.tau)*ct)
+                ct.assign((self.tau*c) + ((1-self.tau)*ct))
 
             # actor
             for (at,a) in zip(self.actor_target.variables, self.actor.variables):
-                at.assign(self.tau*a + (1 - self.tau)*at)
+                at.assign((self.tau*a) + ((1 - self.tau)*at))
 
         return 
 
