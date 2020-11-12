@@ -97,7 +97,11 @@ class PE():
             tarin_targ: tf tensor, shape (batch_size, state_dim + 2), target output
             This function should compute the Gaussian MLE loss, summed across the entire batch.
         '''
-        raise NotImplementedError
+        our_outputs = network.forward(train_in)
+        m, logv = self.get_output(our_outputs, True)
+        train_loss = (tf.math.square(train_targ - m) / tf.math.exp(logv)) + logv # log base? also check the syntax lol
+
+        # raise NotImplementedError
 
         # regularization step. populate train_loss with correct Gaussian MLE loss
         train_loss += 0.01 * (tf.math.reduce_sum(self.max_logvar) - \
@@ -240,8 +244,31 @@ class PE():
                 train_targ = tf.gather(targets, batch_idxs)
                 
                 # For each network, get loss, compute gradient of loss
-                # And apply optimizer step.
-                raise NotImplementedError
+                ######### ASK/CHECK: #############
+                # for nw in self.networks: 
+                #     with tf.GradientTape() as tape:
+                #         train_loss = self._train_loss_one(nw, train_in, train_targ) # get loss for each network
+                #     nw_grads = tape.gradient(train_loss, nw.trainable_variables) # get gradients for each network
+                #     self.optimizer.apply_gradients(zip(nw_grads, nw.trainable_variables)) # apply respective gradients with Adam for each network (separately)
+                # # And apply optimizer step.
+
+                # for nw in self.networks: 
+                # with tf.GradientTape() as tape:
+                #     train_losses = self._train_loss_one(self.networks, train_in, train_targ) # get loss for each network
+                # all_nw_grads = tape.gradient(train_losses, self.networks.trainable_variables) # get gradients for each network
+                # self.optimizer.apply_gradients(zip(all_nw_grads, self.networks.trainable_variables)) # apply respective gradients with Adam for each network (separately)
+                
+                train_loss_full = 0
+                with tf.GradientTape() as tape:
+                    for nw in self.networks: 
+                        train_loss = self._train_loss_one(nw, train_in, train_targ) # get loss for each network
+                        train_loss_full += train_loss
+                nw_grads = tape.gradient(train_loss_full, nw.trainable_variables) # get gradients for each network
+                self.optimizer.apply_gradients(zip(nw_grads, nw.trainable_variables)) # apply respective gradients with Adam for each network (separately)
+
+                
+
+                # raise NotImplementedError
                 
                 grad_updates += 1
 
@@ -314,8 +341,19 @@ class PE():
             samples[:, 0] should be the rewards, samples[:, 1] should be the not-done signals,
             and samples[:, 2:] should be the next states.
         '''
+        samples = []
         inputs = self._prepare_input(state, action)
-        raise NotImplementedError
+        for i in range(len(inputs)):
+            ind = np.random.choice(self._model_inds, size = 1)
+            our_model = self.networks[ind]
+            # if deterministic:
+            output = our_model.forward(inputs[i]) # (mean and var of reward), done, delta state
+            print('output', output)
+
+
+            samples.append(output)
+
+        # raise NotImplementedError
         return samples
 
 
