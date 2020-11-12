@@ -188,6 +188,8 @@ class TD3():
             # Compute actor losses
             with tf.GradientTape() as tape_actor: # everything we perform GD on 
                 curr_policy = self.actor.call(state)
+                # print(state.dtype)
+                # print(curr_policy.dtype)
                 cond_current_Q = self.critic.Q1(state, curr_policy)
                 actor_loss = -tf.math.reduce_mean(cond_current_Q) # negative since we maximize 
             actor_grads = tape_actor.gradient(actor_loss, self.actor.trainable_variables)
