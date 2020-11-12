@@ -328,7 +328,7 @@ class MBPO:
  
             
             # Train agent after collecting sufficient data
-            if t > self.start_timesteps: # ask about this, just for MBPO? 
+            if t >= self.start_timesteps:
                 state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
                 self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
 

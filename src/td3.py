@@ -182,7 +182,7 @@ class TD3():
 
         # Optimize the critic
         self.critic_optimizer.apply_gradients(zip(critic_grads, self.critic.trainable_variables))
-        if self.total_it % self.policy_freq:
+        if self.total_it % self.policy_freq == 0:
         #       t       mod     d
         # Delayed policy updates
             # Compute actor losses
