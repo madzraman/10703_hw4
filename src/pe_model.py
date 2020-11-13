@@ -355,7 +355,7 @@ class PE():
             output = our_model.forward(inputs[i]) # (mean and var of reward), done, delta state
             print('output', output)
 
-            
+
             samples.append(output)
 
         # raise NotImplementedError
