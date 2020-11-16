@@ -334,11 +334,11 @@ class PE():
             ind = np.random.choice(self._model_inds, size = 1)[0]
             # print("ind", ind)
             our_model = self.networks[ind]
-            print("ith input", inputs[i,:])
-            this_input = tf.reshape(inputs[i,:], [1,tf.shape(inputs)[1]])
+            # print("ith input", inputs[i,:])
+            this_input = tf.gather(inputs, [0])
             print("this input after transpose", this_input)
             print("predict forward...")
-            output_means, output_variance = our_model.forward(this_input) # two tensors, all means, all variances
+            output_means, output_variance = self.get_output(our_model.forward(this_input)) # two tensors, all means, all variances
             if deterministic:
                 # just keep the means
                 next_state_sample = output_means[2] + state[i] # next state = delta state + old state
