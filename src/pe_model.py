@@ -329,8 +329,10 @@ class PE():
         # tf.concat([a, [[1, 2, 3, 4], [5, 6, 7, 8]]], axis=0)
 
         inputs = self._prepare_input(state, action)
+        # print(inputs)
         # print("inputs", inputs)
-        for i in range(len(inputs)):
+        for i in range(tf.shape(inputs)[0]):
+            print(i)
             ind = np.random.choice(self._model_inds, size = 1)[0]
             # print("ind", ind)
             our_model = self.networks[ind]
