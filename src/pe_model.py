@@ -336,8 +336,8 @@ class PE():
             our_model = self.networks[ind]
             # print("ith input", inputs[i,:])
             this_input = tf.gather(inputs, [0])
-            print("this input after transpose", this_input)
-            print("predict forward...")
+            # print("this input after transpose", this_input)
+            # print("predict forward...")
             output_means, output_variance = self.get_output(our_model.forward(this_input)) # two tensors, all means, all variances
             if deterministic:
                 # just keep the means
@@ -346,10 +346,11 @@ class PE():
                 samples = tf.concat([samples, output_means], axis=0)
 
             else:
-                # sample from N(mean, variance)                 
-                rewards_sample = tf.random.normal(shape = 1, mean = output_means[0], stddev = tf.math.sqrt(output_variance[0]))
-                not_done_sample = tf.random.normal(shape = 1, mean = output_means[1], stddev = tf.math.sqrt(output_variance[1]))
-                delta_state_sample = tf.random.normal(shape = 1, mean = output_means[2], stddev = tf.math.sqrt(output_variance[2])) # Try multivariate normal if this is messed up
+                # sample from N(mean, variance)  
+                # print("output mean 1:", output_means[0])               
+                rewards_sample = tf.random.normal(shape = [1,1], mean = output_means[0,0], stddev = tf.math.sqrt(output_variance[0,0]))
+                not_done_sample = tf.random.normal(shape = [1,1], mean = output_means[0,-1], stddev = tf.math.sqrt(output_variance[0,-1]))
+                delta_state_sample = tf.random.normal(shape = [1,self.state_dim], mean = output_means[0,1:1+self.state_dim], stddev = tf.math.sqrt(output_variance[0,1:1+self.state_dim])) # Try multivariate normal if this is messed up
                 next_state_sample = state[i] + delta_state_sample
                 sample = tf.concat([rewards_sample, not_done_sample, next_state_sample], axis = 1)
                 samples = tf.concat([samples, sample], axis=0)
