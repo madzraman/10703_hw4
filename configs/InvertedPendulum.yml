@@ -1,5 +1,5 @@
 train_kwargs:
-  enable_MBPO: false
+  enable_MBPO: true
   policy: TD3 
   env_name: InvertedPendulumBulletEnv-v0
   seed: 0

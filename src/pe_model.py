@@ -33,6 +33,7 @@ class PEModel(keras.Model):
             Calls the network on a batch of inputs.
             net_input should have size (batch_size, state_dim+action_dim)
         '''
+        # print("net_input into forward", net_input)
         out = self.l1(net_input)
         out = self.l2(out)
         out = self.l3(out)
@@ -245,8 +246,6 @@ class PE():
                 train_targ = tf.gather(targets, batch_idxs)
                 
                 # For each network, get loss, compute gradient of loss
-                ######### ASK/CHECK: #############
-                # version1:
                 for nw in self.networks: 
                     with tf.GradientTape() as tape:
                         train_loss = self._train_loss_one(nw, train_in, train_targ) # get loss for each network
@@ -254,26 +253,6 @@ class PE():
                     self.optimizer.apply_gradients(zip(nw_grads, nw.trainable_variables)) # apply respective gradients with Adam for each network (separately)
                 
                 # # And apply optimizer step.
-
-                # version2:
-                # for nw in self.networks: 
-                # with tf.GradientTape() as tape:
-                #     train_losses = self._train_loss_one(self.networks, train_in, train_targ) # get loss for each network
-                # all_nw_grads = tape.gradient(train_losses, self.networks.trainable_variables) # get gradients for each network
-                # self.optimizer.apply_gradients(zip(all_nw_grads, self.networks.trainable_variables)) # apply respective gradients with Adam for each network (separately)
-                
-                # version3:
-                # train_loss_full = 0
-                # with tf.GradientTape() as tape:
-                #     for nw in self.networks: 
-                #         train_loss = self._train_loss_one(nw, train_in, train_targ) # get loss for each network
-                #         train_loss_full += train_loss
-                # nw_grads = tape.gradient(train_loss_full, nw.trainable_variables) # get gradients for each network
-                # self.optimizer.apply_gradients(zip(nw_grads, nw.trainable_variables)) # apply respective gradients with Adam for each network (separately)
-
-                
-
-                # raise NotImplementedError
                 
                 grad_updates += 1
 
@@ -344,21 +323,38 @@ class PE():
             action: np tensor, shape (batch_size, action_dim) or (action_dim, )
             samples (return value): np tensor, shape (batch_size, state_dim+2)
             samples[:, 0] should be the rewards, samples[:, 1] should be the not-done signals,
-            and samples[:, 2:] should be the next states.
+            and samples[:, 2] should be the next states.
         '''
-        samples = []
+        samples = tf.zeros([0, self.state_dim+2])
+        # tf.concat([a, [[1, 2, 3, 4], [5, 6, 7, 8]]], axis=0)
+
         inputs = self._prepare_input(state, action)
+        # print("inputs", inputs)
         for i in range(len(inputs)):
-            ind = np.random.choice(self._model_inds, size = 1)
+            ind = np.random.choice(self._model_inds, size = 1)[0]
+            # print("ind", ind)
             our_model = self.networks[ind]
-            # if deterministic:
-            output = our_model.forward(inputs[i]) # (mean and var of reward), done, delta state
-            print('output', output)
+            print("ith input", inputs[i,:])
+            this_input = tf.reshape(inputs[i,:], [1,tf.shape(inputs)[1]])
+            print("this input after transpose", this_input)
+            print("predict forward...")
+            output_means, output_variance = our_model.forward(this_input) # two tensors, all means, all variances
+            if deterministic:
+                # just keep the means
+                next_state_sample = output_means[2] + state[i] # next state = delta state + old state
+                output_means[2] = next_state_sample
+                samples = tf.concat([samples, output_means], axis=0)
 
-
-            samples.append(output)
-
+            else:
+                # sample from N(mean, variance)                 
+                rewards_sample = tf.random.normal(shape = 1, mean = output_means[0], stddev = tf.math.sqrt(output_variance[0]))
+                not_done_sample = tf.random.normal(shape = 1, mean = output_means[1], stddev = tf.math.sqrt(output_variance[1]))
+                delta_state_sample = tf.random.normal(shape = 1, mean = output_means[2], stddev = tf.math.sqrt(output_variance[2])) # Try multivariate normal if this is messed up
+                next_state_sample = state[i] + delta_state_sample
+                sample = tf.concat([rewards_sample, not_done_sample, next_state_sample], axis = 1)
+                samples = tf.concat([samples, sample], axis=0)
         # raise NotImplementedError
+
         return samples
 
 

@@ -10,6 +10,7 @@ import tensorflow as tf
 import pybullet_envs
 import gym
 import matplotlib.pyplot as plt
+import copy
 
 from src.utils import ReplayBuffer
 from src.td3 import TD3
@@ -208,9 +209,15 @@ class MBPO:
             if j == batch_pass - 1:
                 if rollout_batch_size % unit_batch_size != 0:
                     unit_batch_size = rollout_batch_size % unit_batch_size
-
-            # hint: make use of self.fake_env. Checkout documentation for FakeEnv.py
-            raise NotImplementedError
+            states, _ , _ , _ , _ = self.replay_buffer_Env.sample(batch_size=unit_batch_size*self.num_rollouts_per_step) # B x M
+            while (total_steps < self.rollout_horizon) or (not tf.math.reduce_all(done)):
+                noise = tf.clip_by_value(tf.random.normal((unit_batch_size*self.num_rollouts_per_step, self.action_dim)) * self.policy_noise, -self.noise_clip, self.noise_clip)
+                next_actions = tf.clip_by_value(self.policy.actor(states) + noise, -self.max_action, self.max_action)
+                next_states, rewards, done = self.fake_env.step(states, next_actions)
+                # hint: make use of self.fake_env. Checkout documentation for FakeEnv.py
+                self.replay_buffer_Model.add_batch(states, next_actions, next_states, rewards, done)
+                states = copy.deepcopy(next_states) # maybe don't need to copy? or tf.identity?
+            # raise NotImplementedError
 
         print('[ Model Rollout ] Added: {:.1e} | Model pool: {:.1e} (max {:.1e})'.format(
             total_steps, self.replay_buffer_Model.size, self.replay_buffer_Model.max_size
@@ -313,27 +320,33 @@ class MBPO:
                 action = env.action_space.sample()
             else:
                 action = self.get_action_policy(state)
-                # Perform model rollout and model training at appropriate timesteps 
-
-            # Perform action
             new_state, reward, done, info = env.step(action)
-            # print("REWARD:", reward,action, done)
             episode_reward+= reward
             # Store data in replay buffer
-            if not self.enable_MBPO:
-                self.replay_buffer_Env.add(state, action, new_state, reward, done)
-            else:
-                raise NotImplementedError
+            self.replay_buffer_Env.add(state, action, new_state, reward, done)
             state = new_state
- 
-            
+
+
+            # Perform model rollout and model training at appropriate timesteps 
+            # Perform multiple gradient steps per environment step for MBPO
+            if self.enable_MBPO:
+                if (t % self.model_update_freq == 0):
+                    self.model.train(self.replay_buffer_Env)
+                    self.model_rollout()
+
             # Train agent after collecting sufficient data
             if t >= self.start_timesteps:
-                state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
-                self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
+                if self.enable_MBPO:
+                    for g in range(self.num_gradient_updates):
+                        state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
+                        self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
+                else: # TD3
+                    state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
+                    self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
 
-            # Perform multiple gradient steps per environment step for MBPO
 
+            
+            
 
             if done:
                 print("REWARD:", reward)
