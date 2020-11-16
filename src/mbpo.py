@@ -211,12 +211,19 @@ class MBPO:
                     unit_batch_size = rollout_batch_size % unit_batch_size
             states, _ , _ , _ , _ = self.replay_buffer_Env.sample(batch_size=unit_batch_size*self.num_rollouts_per_step) # B x M
             while (total_steps < self.rollout_horizon) or (not tf.math.reduce_all(done)):
+                print(total_steps)
                 noise = tf.clip_by_value(tf.random.normal((unit_batch_size*self.num_rollouts_per_step, self.action_dim)) * self.policy_noise, -self.noise_clip, self.noise_clip)
                 next_actions = tf.clip_by_value(self.policy.actor(states) + noise, -self.max_action, self.max_action)
+                print("clipped")
                 next_states, rewards, done = self.fake_env.step(states, next_actions)
+                print("stepped")
                 # hint: make use of self.fake_env. Checkout documentation for FakeEnv.py
+                print("sizer before", self.replay_buffer_Model.size)
+                print("REWARDS:", rewards)
                 self.replay_buffer_Model.add_batch(states, next_actions, next_states, rewards, done)
-                states = copy.deepcopy(next_states) # maybe don't need to copy? or tf.identity?
+                print("Size after:", self.replay_buffer_Model.size)
+                states = next_states # maybe don't need to copy? or tf.identity?
+                total_steps = total_steps + 1
             # raise NotImplementedError
 
         print('[ Model Rollout ] Added: {:.1e} | Model pool: {:.1e} (max {:.1e})'.format(
@@ -244,8 +251,8 @@ class MBPO:
             If MBPO is disabled, then simply sample a batch from real environment replay buffer.
         '''
         if self.enable_MBPO:
-            real_number = self.percentage_real_transition * self.batch_size
-            model_number = (1- self.percentage_real_transition) * self.batch_size
+            real_number = int(self.percentage_real_transition * self.batch_size)
+            model_number = int((1- self.percentage_real_transition) * self.batch_size)
 
             # Real
             state_e, action_e, next_state_e, reward_e, not_done_e = self.replay_buffer_Env.sample(real_number)
@@ -320,24 +327,26 @@ class MBPO:
                 action = env.action_space.sample()
             else:
                 action = self.get_action_policy(state)
-            new_state, reward, done, info = env.step(action)
+                # Perform model rollout and model training at appropriate timesteps 
+                if ((t-self.start_timesteps) % self.model_update_freq == 0) and self.enable_MBPO: # want to run at beginning 
+                        self.model.train(self.replay_buffer_Env)
+                        self.model_rollout()
+ 
+
+            # Perform action 
+            new_state, reward, done, _ = env.step(action)
             episode_reward+= reward
             # Store data in replay buffer
             self.replay_buffer_Env.add(state, action, new_state, reward, done)
             state = new_state
 
 
-            # Perform model rollout and model training at appropriate timesteps 
-            # Perform multiple gradient steps per environment step for MBPO
-            if self.enable_MBPO:
-                if (t % self.model_update_freq == 0):
-                    self.model.train(self.replay_buffer_Env)
-                    self.model_rollout()
-
             # Train agent after collecting sufficient data
             if t >= self.start_timesteps:
                 if self.enable_MBPO:
-                    for g in range(self.num_gradient_updates):
+                    # Perform multiple gradient steps per environment step for MBPO
+                    for _ in range(self.num_gradient_updates):
+                        # print(self.replay_buffer_Model.size)
                         state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
                         self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
                 else: # TD3
