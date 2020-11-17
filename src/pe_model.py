@@ -344,41 +344,22 @@ class PE():
             output_means, output_variance = self.get_output(our_model.forward(this_input)) # two tensors, all means, all variances
             if deterministic:
                 # just keep the means
-                next_state_sample = output_means[2] + state[i] # next state = delta state + old state
-                output_means[2] = next_state_sample
-                samples = tf.concat([samples, output_means], axis=0)
+                next_state_sample = output_means[0,2:] + state[i] # next state = delta state + old state
+                output_means[0,2:] = next_state_sample
+                samples = tf.concat([samples, output_means], 0)
 
             else:
                 # sample from N(mean, variance)  
                 # print("output mean 1:", output_means[0])               
                 rewards_sample = tf.random.normal(shape = [1,1], mean = output_means[0,0], stddev = tf.math.sqrt(output_variance[0,0]))
-                not_done_sample = tf.random.normal(shape = [1,1], mean = output_means[0,-1], stddev = tf.math.sqrt(output_variance[0,-1]))
-                delta_state_sample = tf.random.normal(shape = [1,self.state_dim], mean = output_means[0,1:1+self.state_dim], stddev = tf.math.sqrt(output_variance[0,1:1+self.state_dim])) # Try multivariate normal if this is messed up
+                not_done_sample = tf.random.normal(shape = [1,1], mean = output_means[0,1], stddev = tf.math.sqrt(output_variance[0,1]))
+                delta_state_sample = tf.random.normal(shape = [1,self.state_dim], mean = output_means[0,2:], stddev = tf.math.sqrt(output_variance[0,2:])) # Try multivariate normal if this is messed up
                 next_state_sample = state[i] + delta_state_sample
-                sample = tf.concat([rewards_sample, not_done_sample, next_state_sample], axis = 1)
-                samples = tf.concat([samples, sample], axis=0)
+                sample = tf.concat([rewards_sample, not_done_sample, next_state_sample], 1)
+                samples = tf.concat([samples, sample], 0)
             
             
-        # ind = np.random.choice(self._model_inds, size = 1)[0]
-        # our_model = self.networks[ind]
-        # output_means, output_variance = self.get_output(our_model.forward(inputs)) # two tensors, all means, all variances
-        #     if deterministic:
-        #         # just keep the means
-        #         next_state_sample = output_means[2,:] + state[i] # next state = delta state + old state
-        #         output_means[2] = next_state_sample
-        #         samples = tf.concat([samples, output_means], axis=0)
-
-        #     else:
-        #         # sample from N(mean, variance)  
-        #         # print("output mean 1:", output_means[0])               
-        #         rewards_sample = tf.random.normal(shape = [1,1], mean = output_means[:,0], stddev = tf.math.sqrt(output_variance[:,0]))
-        #         not_done_sample = tf.random.normal(shape = [1,1], mean = output_means[:,-1], stddev = tf.math.sqrt(output_variance[:,-1]))
-        #         delta_state_sample = tf.random.normal(shape = [1,self.state_dim], mean = output_means[:,1:1+self.state_dim], stddev = tf.math.sqrt(output_variance[:,1:1+self.state_dim])) # Try multivariate normal if this is messed up
-        #         next_state_sample = state[i] + delta_state_sample
-        #         sample = tf.concat([rewards_sample, not_done_sample, next_state_sample], axis = 1)
-        #         samples = tf.concat([samples, sample], axis=0)
-        # raise NotImplementedError
-
+        # columns: rewards, not_done , new state 
         return samples
 
 

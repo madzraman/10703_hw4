@@ -194,36 +194,43 @@ class MBPO:
             Continue until you rollout k steps for each of your B * M starting states, or you
             reached episode end for all starting states.
         '''
-        rollout_batch_size = self.rollout_batch_size
+        rollout_batch_size = self.rollout_batch_size # B times M
         print('[ Model Rollout ] Starting  Rollout length: {} | Batch size: {}'.format(
             self.rollout_horizon, rollout_batch_size
         ))
-        unit_batch_size = self.model_rollout_batch_size
+        unit_batch_size = self.model_rollout_batch_size # B?
 
-        batch_pass = self.num_rollouts_per_step
+        batch_pass = self.num_rollouts_per_step # M 
+        print('Batch pass:', batch_pass)
 
         # populate this variable with total number of model transitions collected
         total_steps = 0
-
-        for j in range(batch_pass):
-            if j == batch_pass - 1:
+        for j in range(batch_pass): # M 
+            print(j)
+            if j == batch_pass - 1: # deals with remainders
                 if rollout_batch_size % unit_batch_size != 0:
                     unit_batch_size = rollout_batch_size % unit_batch_size
-            states, _ , _ , _ , _ = self.replay_buffer_Env.sample(batch_size=unit_batch_size*self.num_rollouts_per_step) # B x M
-            while (total_steps < self.rollout_horizon) or (not tf.math.reduce_all(done)):
-                print(total_steps)
-                noise = tf.clip_by_value(tf.random.normal((unit_batch_size*self.num_rollouts_per_step, self.action_dim)) * self.policy_noise, -self.noise_clip, self.noise_clip)
-                next_actions = tf.clip_by_value(self.policy.actor(states) + noise, -self.max_action, self.max_action)
-                print("clipped")
+            # For M loops, use batch size B
+            states, _ , _ , _ , _ = self.replay_buffer_Env.sample(batch_size=unit_batch_size) # B 
+            done = np.zeros((2,), dtype = bool) # reset to handle loop gaurd
+            k = 0 ## ^^
+            while (k < self.rollout_horizon) and (not np.all(done)):
+                print("Total steps:", total_steps)
+                noise = tf.clip_by_value(tf.random.normal((unit_batch_size, self.action_dim)) * self.policy_noise, -self.noise_clip, self.noise_clip)
+                next_actions = tf.clip_by_value(self.policy.actor.call(states) + noise, -self.max_action, self.max_action)
+                # print("clipped")
                 next_states, rewards, done = self.fake_env.step(states, next_actions)
-                print("stepped")
+                # print("stepped")
                 # hint: make use of self.fake_env. Checkout documentation for FakeEnv.py
-                print("sizer before", self.replay_buffer_Model.size)
-                print("REWARDS:", rewards)
+                # print("sizer before", self.replay_buffer_Model.size)
+                # print("REWARDS:", rewards)
                 self.replay_buffer_Model.add_batch(states, next_actions, next_states, rewards, done)
-                print("Size after:", self.replay_buffer_Model.size)
+                # print("Size after:", self.replay_buffer_Model.size)
                 states = next_states # maybe don't need to copy? or tf.identity?
-                total_steps = total_steps + 1
+                total_steps = total_steps + unit_batch_size # each loop we transition model batch size times
+                k = k + 1 # 
+                # print("Done", done)
+                # print("reduced done", tf.math.reduce_all(done))
             # raise NotImplementedError
 
         print('[ Model Rollout ] Added: {:.1e} | Model pool: {:.1e} (max {:.1e})'.format(
@@ -252,7 +259,7 @@ class MBPO:
         '''
         if self.enable_MBPO:
             real_number = int(self.percentage_real_transition * self.batch_size)
-            model_number = int((1- self.percentage_real_transition) * self.batch_size)
+            model_number = int(self.batch_size - real_number)
 
             # Real
             state_e, action_e, next_state_e, reward_e, not_done_e = self.replay_buffer_Env.sample(real_number)

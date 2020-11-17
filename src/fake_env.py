@@ -33,4 +33,5 @@ class FakeEnv:
         done = (1. - not_done)
 
         # Convert to all numpy, done should be boolean
+        # print("FAKE ENV DONE:", (done > 0.5))
         return next_x.numpy(), rewards.numpy(), (done > 0.5).numpy()
