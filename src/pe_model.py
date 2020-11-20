@@ -360,7 +360,7 @@ class PE():
             
             
         # columns: rewards, not_done , new state 
-        return samples
+        return samples.numpy()
 
 
 # Sanity Check to test your PE model implementation.
