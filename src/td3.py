@@ -109,12 +109,17 @@ class TD3():
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = keras.optimizers.Adam(learning_rate=3e-4)
 
+        self.explore = "corr" # where we'll change 
+
         self.max_action = max_action
         self.discount = discount
         self.tau = tau
         self.policy_noise = policy_noise
         self.noise_clip = noise_clip 
         self.policy_freq = policy_freq
+        self.sigma = 0.2 # correlated
+        self.theta = 0.15 # corr
+        self.delta_t = 0.01 # corr
 
         self.total_it = 0
 
@@ -153,11 +158,25 @@ class TD3():
         self.total_it += 1
 
         # Select action according to policy and add clipped noise
-        noise = tf.clip_by_value(tf.random.normal(action.shape) * self.policy_noise,
-                                 -self.noise_clip, self.noise_clip)
+        prev_noise = tf.random.normal(action.shape) # change? 
+        if explore == "iid":
+            noise = tf.clip_by_value(tf.random.normal(action.shape) * self.policy_noise,
+                                    -self.noise_clip, self.noise_clip)
 
-        next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
-                                       -self.max_action, self.max_action)
+            next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
+                                        -self.max_action, self.max_action)
+        if explore == "corr":  
+            z = tf.random.normal(action.shape)
+            ou_noise = prev_noise + self.theta * prev_noise * self.delta_t + self.sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
+            noise = tf.clip_by_value(ou_noise,
+                                    -self.noise_clip, self.noise_clip)
+
+            next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
+                                        -self.max_action, self.max_action)
+            prev_noise = noise
+
+
+        
         # Compute the target Q value
         # print(not_done)
         critic_Q1, critic_Q2 = self.critic_target.call(next_state, next_action) # stop gradient? 
