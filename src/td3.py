@@ -106,11 +106,13 @@ class TD3():
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = keras.optimizers.Adam(learning_rate=3e-4)
 
+        self.actor_perturb = copy.deepcopy(self.actor) # ????
+
         self.critic = Critic()
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = keras.optimizers.Adam(learning_rate=3e-4)
 
-        self.explore = "iid" # where we'll change 
+        
 
         self.max_action = max_action
         self.discount = discount
@@ -118,9 +120,7 @@ class TD3():
         self.policy_noise = policy_noise
         self.noise_clip = noise_clip 
         self.policy_freq = policy_freq
-        self.sigma = 0.2 # correlated
-        self.theta = 0.15 # corr
-        self.delta_t = 0.01 # corr
+        
 
         self.total_it = 0
 
@@ -159,24 +159,15 @@ class TD3():
         self.total_it += 1
 
         # Select action according to policy and add clipped noise
-        prev_noise = tf.random.normal(action.shape) # change? 
-        if self.explore == "clipped_iid":
-            noise = tf.clip_by_value(tf.random.normal(action.shape) * self.policy_noise,
-                                    -self.noise_clip, self.noise_clip)
+        
+        
+        noise = tf.clip_by_value(tf.random.normal(action.shape) * self.policy_noise,
+                                -self.noise_clip, self.noise_clip)
 
-            next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
+        next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
                                         -self.max_action, self.max_action)
-        if self.explore == "iid":
-            noise = tf.random.normal(action.shape) * self.policy_noise
+        
 
-            next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
-                                        -self.max_action, self.max_action)
-        if self.explore == "corr":  
-            z = tf.random.normal(action.shape)
-            ou_noise = prev_noise + self.theta * prev_noise * self.delta_t + self.sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
-            next_action = tf.clip_by_value(self.actor_target(next_state) + ou_noise,
-                                        -self.max_action, self.max_action)
-            prev_noise = ou_noise
 
 
 

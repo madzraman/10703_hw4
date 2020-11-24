@@ -11,6 +11,7 @@ import pybullet_envs
 import gym
 import matplotlib.pyplot as plt
 import copy
+import math
 
 from src.utils import ReplayBuffer
 from src.td3 import TD3
@@ -52,6 +53,15 @@ class MBPO:
         self.policy_noise = TD3_kwargs["policy_noise"] #sigma in Target Policy Smoothing
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
+
+        self.explore = "param" # where we'll change 
+        self.iid_sigma = 0.3
+        
+        self.corr_sigma = 0.2
+        self.theta = 0.15 # corr
+        self.delta_t = 0.01 # corr
+
+        self.param_sigma = 0.1
 
         # Dynamics model parameters
         self.num_networks = model_kwargs["num_networks"] #number of networks in ensemble
@@ -121,6 +131,7 @@ class MBPO:
 
         self.state_dim = state_dim
         self.action_dim = action_dim
+        
         self.max_action = max_action
 
         td3_kwargs = {
@@ -160,10 +171,20 @@ class MBPO:
         '''
             Adds exploration noise to an action returned by the TD3 actor.
         '''
-        action = (
-            self.policy.select_action(np.array(state))
-            + np.random.normal(0, self.max_action * self.expl_noise, size=self.action_dim)
-        ).clip(-self.max_action, self.max_action)
+        if self.explore == "iid":
+            action = (self.policy.select_action(np.array(state)) + np.random.normal(0, self.iid_sigma, size=self.action_dim)).clip(-self.max_action, self.max_action)
+        
+        if self.explore == "corr":  
+            
+            z = np.random.normal(0, 1, size = self.action_dim)
+            ou_noise = self.prev_noise + self.theta * self.prev_noise * self.delta_t + self.corr_sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
+            action = (self.policy.select_action(np.array(state)) + ou_noise).clip(-self.max_action, self.max_action)
+            self.prev_noise = ou_noise
+        
+        if self.explore == "param":   
+            state = tf.convert_to_tensor(np.array(state).reshape(1, -1))
+            action = (self.policy.actor_perturb(state).numpy().flatten()).clip(-self.max_action, self.max_action)
+        
         return action
 
     def get_action_policy_batch(self, state):
@@ -333,11 +354,20 @@ class MBPO:
             training_rewards = np.zeros(E)
             t = 0
             
+            if self.explore == "corr":
+                self.prev_noise = np.random.normal(self.action_dim) 
+
+            if self.explore == "param": # ALSO COPY PASTED IN IF DONE *****
+                self.policy.actor_perturb = copy.deepcopy(self.policy.actor)
+                old_weights = np.array(self.policy.actor.trainable_weights) # why is this empty at the beginning?
+                # print("OLD WEIGHTS\n", old_weights)
+                new_weights = old_weights + self.param_sigma * np.random.normal(old_weights.shape)
+                self.policy.actor_perturb.set_weights(new_weights) 
             while (episode_num < E):
             # for t in range(int(self.max_timesteps)):
                 
                 episode_timesteps += 1
-
+                
                 # Select action randomly or according to policy
                 if t < self.start_timesteps:
                     action = env.action_space.sample()
@@ -381,6 +411,15 @@ class MBPO:
                     training_rewards[episode_num] = episode_reward
                     
                     # Reset environment
+                    if self.explore == "corr":
+                        self.prev_noise = np.random.normal(self.action_dim) 
+                    if self.explore == "param":
+                        self.policy.actor_perturb = copy.deepcopy(self.policy.actor)
+                        old_weights = np.array(self.policy.actor.trainable_weights) # why is this empty at the beginning?
+                        # print("OLD WEIGHTS 2\n", old_weights)
+                        new_weights = old_weights + self.param_sigma * np.random.normal(old_weights.shape)
+                        self.policy.actor_perturb.set_weights(new_weights) 
+
                     state, done = env.reset(), False
                     episode_reward = 0
                     episode_timesteps = 0
