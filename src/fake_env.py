@@ -26,7 +26,7 @@ class FakeEnv:
             state = tf.convert_to_tensor(state)
         if not tf.is_tensor(action):
             action = tf.convert_to_tensor(action)
-        print("predict")
+        # print("predict")
         samples = self.model.predict(state, action) # (B, -1)
         # (B,), (B,), (B, X)
         rewards, not_done, next_x = samples[:, 0], samples[:, 1], samples[:, 2:]
@@ -34,4 +34,4 @@ class FakeEnv:
 
         # Convert to all numpy, done should be boolean
         # print("FAKE ENV DONE:", (done > 0.5))
-        return next_x.numpy(), rewards.numpy(), (done > 0.5).numpy()
+        return next_x, rewards, (done > 0.5)
