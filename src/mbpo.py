@@ -206,7 +206,7 @@ class MBPO:
         # populate this variable with total number of model transitions collected
         total_steps = 0
         for j in range(batch_pass): # M 
-            print(j)
+            # print(j)
             if j == batch_pass - 1: # deals with remainders
                 if rollout_batch_size % unit_batch_size != 0:
                     unit_batch_size = rollout_batch_size % unit_batch_size
@@ -215,7 +215,7 @@ class MBPO:
             done = np.zeros((2,), dtype = bool) # reset to handle loop gaurd
             k = 0 ## ^^
             while (k < self.rollout_horizon) and (not np.all(done)):
-                print("Total steps:", total_steps)
+                # print("Total steps:", total_steps)
                 noise = tf.clip_by_value(tf.random.normal((unit_batch_size, self.action_dim)) * self.policy_noise, -self.noise_clip, self.noise_clip)
                 next_actions = tf.clip_by_value(self.policy.actor.call(states) + noise, -self.max_action, self.max_action)
                 # print("clipped")
