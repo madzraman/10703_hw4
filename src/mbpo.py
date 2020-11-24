@@ -183,6 +183,7 @@ class MBPO:
         
         if self.explore == "param":   
             state = tf.convert_to_tensor(np.array(state).reshape(1, -1))
+            state = tf.cast(state, dtype = "float32")
             action = (self.policy.actor_perturb(state).numpy().flatten()).clip(-self.max_action, self.max_action)
         
         return action
