@@ -8,6 +8,7 @@ import copy
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
+import math
 
 class Actor(keras.Model):
     '''
@@ -109,7 +110,7 @@ class TD3():
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = keras.optimizers.Adam(learning_rate=3e-4)
 
-        self.explore = "corr" # where we'll change 
+        self.explore = "iid" # where we'll change 
 
         self.max_action = max_action
         self.discount = discount
@@ -159,21 +160,24 @@ class TD3():
 
         # Select action according to policy and add clipped noise
         prev_noise = tf.random.normal(action.shape) # change? 
-        if explore == "iid":
+        if self.explore == "clipped_iid":
             noise = tf.clip_by_value(tf.random.normal(action.shape) * self.policy_noise,
                                     -self.noise_clip, self.noise_clip)
 
             next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
                                         -self.max_action, self.max_action)
-        if explore == "corr":  
-            z = tf.random.normal(action.shape)
-            ou_noise = prev_noise + self.theta * prev_noise * self.delta_t + self.sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
-            noise = tf.clip_by_value(ou_noise,
-                                    -self.noise_clip, self.noise_clip)
+        if self.explore == "iid":
+            noise = tf.random.normal(action.shape) * self.policy_noise
 
             next_action = tf.clip_by_value(self.actor_target(next_state) + noise,
                                         -self.max_action, self.max_action)
-            prev_noise = noise
+        if self.explore == "corr":  
+            z = tf.random.normal(action.shape)
+            ou_noise = prev_noise + self.theta * prev_noise * self.delta_t + self.sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
+            next_action = tf.clip_by_value(self.actor_target(next_state) + ou_noise,
+                                        -self.max_action, self.max_action)
+            prev_noise = ou_noise
+
 
 
         

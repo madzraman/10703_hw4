@@ -307,80 +307,106 @@ class MBPO:
         '''
             Main training loop for both TD3 and MBPO. See Figure 2 in writeup.
         '''
-        self.init_models_and_buffer()
-        env = gym.make(self.env_name)
-        # Set seeds
-        env.seed(self.seed)
+        E = 1000
+        avg_training_rewards = np.zeros(E)
+        for seed in range(3): # 3 seeds
+            print(seed)
+            self.seed += seed
+            self.init_models_and_buffer()
+            env = gym.make(self.env_name)
+            # Set seeds
+            env.seed(self.seed)
 
-        # Evaluate untrained policy
-        evaluations = [self.eval_policy()]
+            # Evaluate untrained policy (HW 4)
+            # evaluations = [self.eval_policy()]
+            # evaluate_timesteps = [0]
+            # evaluate_episodes = [0]
 
-        evaluate_timesteps = [0]
-        evaluate_episodes = [0]
+            state, done = env.reset(), False
 
-        state, done = env.reset(), False
+            # You may want to set episode_reward appropriately
+            episode_reward = 0
+            episode_timesteps = 0
+            episode_num = 0
 
-        # You may want to set episode_reward appropriately
-        episode_reward = 0
-        episode_timesteps = 0
-        episode_num = 0
+            
+            training_rewards = np.zeros(E)
+            t = 0
+            
+            while (episode_num < E):
+            # for t in range(int(self.max_timesteps)):
+                
+                episode_timesteps += 1
 
-        for t in range(int(self.max_timesteps)):
+                # Select action randomly or according to policy
+                if t < self.start_timesteps:
+                    action = env.action_space.sample()
+                else:
+                    action = self.get_action_policy(state)
+                    # Perform model rollout and model training at appropriate timesteps 
+                    if ((t-self.start_timesteps) % self.model_update_freq == 0) and self.enable_MBPO: # want to run at beginning 
+                            self.model.train(self.replay_buffer_Env)
+                            self.model_rollout()
+    
 
-            episode_timesteps += 1
-
-            # Select action randomly or according to policy
-            if t < self.start_timesteps:
-                action = env.action_space.sample()
-            else:
-                action = self.get_action_policy(state)
-                # Perform model rollout and model training at appropriate timesteps 
-                if ((t-self.start_timesteps) % self.model_update_freq == 0) and self.enable_MBPO: # want to run at beginning 
-                        self.model.train(self.replay_buffer_Env)
-                        self.model_rollout()
- 
-
-            # Perform action 
-            new_state, reward, done, _ = env.step(action)
-            episode_reward+= reward
-            # Store data in replay buffer
-            self.replay_buffer_Env.add(state, action, new_state, reward, done)
-            state = new_state
+                # Perform action 
+                new_state, reward, done, _ = env.step(action)
+                episode_reward+= reward
+                # Store data in replay buffer
+                self.replay_buffer_Env.add(state, action, new_state, reward, done)
+                state = new_state
 
 
-            # Train agent after collecting sufficient data
-            if t >= self.start_timesteps:
-                if self.enable_MBPO:
-                    # Perform multiple gradient steps per environment step for MBPO
-                    for _ in range(self.num_gradient_updates):
-                        # print(self.replay_buffer_Model.size)
+                # Train agent after collecting sufficient data
+                if t >= self.start_timesteps:
+                    if self.enable_MBPO:
+                        # Perform multiple gradient steps per environment step for MBPO
+                        for _ in range(self.num_gradient_updates):
+                            # print(self.replay_buffer_Model.size)
+                            state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
+                            self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
+                    else: # TD3
                         state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
                         self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
-                else: # TD3
-                    state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
-                    self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
 
+
+                
+                
+
+                if done:
+                    print("REWARD:", reward)
+                    # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
+                    print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
+                    
+                    training_rewards[episode_num] = episode_reward
+                    
+                    # Reset environment
+                    state, done = env.reset(), False
+                    episode_reward = 0
+                    episode_timesteps = 0
+                    episode_num += 1
+
+                t += 1
+                # Evaluate episode (from HW 4)
+                # if (t + 1) % self.eval_freq == 0:
+                #     evaluations.append(self.eval_policy())
+                #     evaluate_episodes.append(episode_num+1)
+                #     evaluate_timesteps.append(t+1)
+                #     if len(evaluations) > 5 and np.mean(evaluations[-5:]) > 990:
+                #         self.plot_training_curves(evaluations, evaluate_episodes, evaluate_timesteps)
+                #     np.save(f"./results/{self.file_name}", evaluations)
+                #     if self.save_model:
+                #         self.policy.save(f"./models/{self.file_name}")
+            avg_training_rewards += training_rewards
+        print("now plot")
+        print("avg training rewards", avg_training_rewards)
+        avg_training_rewards /= 3
+        
+        plt.figure(figsize=(12, 8))
+        plt.plot([i for i in range(len(avg_training_rewards))], avg_training_rewards)
+        plt.xlabel("Episode Num")
+        plt.ylabel("Average training reward")
+        plt.title("MountainCarContinuous-v0, Exploration type: %s" % self.policy.explore)
+        plt.savefig(("MountainCarContinuous-v0_%s" % self.policy.explore) + ".png", dpi = 300)
 
             
-            
-
-            if done:
-                print("REWARD:", reward)
-                # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-                print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
-                # Reset environment
-                state, done = env.reset(), False
-                episode_reward = 0
-                episode_timesteps = 0
-                episode_num += 1
-
-            # Evaluate episode
-            if (t + 1) % self.eval_freq == 0:
-                evaluations.append(self.eval_policy())
-                evaluate_episodes.append(episode_num+1)
-                evaluate_timesteps.append(t+1)
-                if len(evaluations) > 5 and np.mean(evaluations[-5:]) > 990:
-                    self.plot_training_curves(evaluations, evaluate_episodes, evaluate_timesteps)
-                np.save(f"./results/{self.file_name}", evaluations)
-                if self.save_model:
-                    self.policy.save(f"./models/{self.file_name}")

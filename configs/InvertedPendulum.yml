@@ -1,7 +1,7 @@
 train_kwargs:
-  enable_MBPO: true
+  enable_MBPO: false
   policy: TD3 
-  env_name: InvertedPendulumBulletEnv-v0
+  env_name: MountainCarContinuous-v0
   seed: 0
   load_model: ''
   max_timesteps: 1000000
