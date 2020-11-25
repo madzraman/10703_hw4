@@ -172,7 +172,7 @@ class MBPO:
             Adds exploration noise to an action returned by the TD3 actor.
         '''
         if self.explore == "iid":
-            action = (self.policy.select_action(np.array(state)) + np.random.normal(0, self.iid_sigma, size=self.action_dim)).clip(-self.max_action, self.max_action)
+            action = (self.policy.select_action(np.array(state)) + self.iid_sigma * np.random.normal(0, 1,size=self.action_dim)).clip(-self.max_action, self.max_action)
         
         if self.explore == "corr":  
             
@@ -183,6 +183,7 @@ class MBPO:
         
         if self.explore == "param":   
             state = tf.convert_to_tensor(np.array(state).reshape(1, -1))
+            state = tf.cast(state, dtype = "float32")
             action = (self.policy.actor_perturb(state).numpy().flatten()).clip(-self.max_action, self.max_action)
         
         return action
@@ -357,12 +358,17 @@ class MBPO:
             if self.explore == "corr":
                 self.prev_noise = np.random.normal(self.action_dim) 
 
-            if self.explore == "param": # ALSO COPY PASTED IN IF DONE *****
+            if self.explore == "param":
                 self.policy.actor_perturb = copy.deepcopy(self.policy.actor)
-                old_weights = np.array(self.policy.actor.trainable_weights) # why is this empty at the beginning?
-                # print("OLD WEIGHTS\n", old_weights)
-                new_weights = old_weights + self.param_sigma * np.random.normal(old_weights.shape)
-                self.policy.actor_perturb.set_weights(new_weights) 
+                old_weights = np.array(self.policy.actor.trainable_weights)
+                # print("OLD WEIGHTS SHAPE", len(old_weights))
+                # for i in range(len(old_weights)):
+                #     w = np.asmatrix(self.policy.actor.layers[i].get_weights())
+                #     noise = self.param_sigma * np.random.normal(size = np.shape(w))
+                #     layer = self.policy.actor_perturb.layers[i]
+                #     layer.set_weights(w + noise)
+                noise = np.random.normal(size = old_weights.shape)
+                self.policy.actor_perturb.set_weights(old_weights + self.param_sigma * noise)
             while (episode_num < E):
             # for t in range(int(self.max_timesteps)):
                 
@@ -415,11 +421,16 @@ class MBPO:
                         self.prev_noise = np.random.normal(self.action_dim) 
                     if self.explore == "param":
                         self.policy.actor_perturb = copy.deepcopy(self.policy.actor)
-                        old_weights = np.array(self.policy.actor.trainable_weights) # why is this empty at the beginning?
-                        # print("OLD WEIGHTS 2\n", old_weights)
-                        new_weights = old_weights + self.param_sigma * np.random.normal(old_weights.shape)
-                        self.policy.actor_perturb.set_weights(new_weights) 
+                        old_weights = np.array(self.policy.actor.trainable_weights)
 
+                        # print("OLD WEIGHTS SHAPE", len(old_weights))
+                        # for i in range(len(old_weights)):
+                        #     w = np.asmatrix(self.policy.actor.layers[i].get_weights())
+                        #     noise = self.param_sigma * np.random.normal(size = np.shape(w))
+                        #     layer = self.policy.actor_perturb.layers[i]
+                        #     layer.set_weights(w + noise)
+                        noise = np.random.normal(size = old_weights.shape)
+                        self.policy.actor_perturb.set_weights(old_weights + self.param_sigma * noise)
                     state, done = env.reset(), False
                     episode_reward = 0
                     episode_timesteps = 0
