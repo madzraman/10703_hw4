@@ -456,7 +456,7 @@ class MBPO:
         plt.plot([i for i in range(len(avg_training_rewards))], avg_training_rewards)
         plt.xlabel("Episode Num")
         plt.ylabel("Average training reward")
-        plt.title("MountainCarContinuous-v0, Exploration type: %s" % self.policy.explore)
-        plt.savefig(("MountainCarContinuous-v0_%s" % self.policy.explore) + ".png", dpi = 300)
+        plt.title("MountainCarContinuous-v0, Exploration type: %s" % self.explore)
+        plt.savefig(("MountainCarContinuous-v0_%s" % self.explore) + ".png", dpi = 300)
 
             
