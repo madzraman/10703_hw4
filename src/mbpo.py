@@ -33,11 +33,11 @@ class RandomDistNetwork:
             metrics=['accuracy']
         )
     def call(self, state):
-        return self.model(state)
+        return self.model(np.asmatrix(state))
     
     def train(self, state, target_f):
         # state is a batch, target_f is output of fixed on state
-        self.model.train(state, target_f)
+        self.model.train_on_batch(state, target_f)
 
 
 class MBPO:
@@ -75,7 +75,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "iid" # where we'll change 
+        self.explore = "dist" # where we'll change 
         self.iid_sigma = 0.3
         
         self.corr_sigma = 0.2
@@ -420,7 +420,7 @@ class MBPO:
                     # add noise to reward
                     f_hat_pred = self.predictor_nework.call(new_state)
                     f_pred = self.fixed_network.call(new_state)
-                    i_t = tf.math.reduce_sum(tf.math.squared_difference(f_hat_pred, f_pred), [0,1]) ## ?? scalar?
+                    i_t = tf.math.reduce_sum(tf.math.squared_difference(f_hat_pred, f_pred), [0, 1]).numpy() 
                     reward = reward + i_t
 
                 self.replay_buffer_Env.add(state, action, new_state, reward, done)
