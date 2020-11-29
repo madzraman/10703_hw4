@@ -18,6 +18,27 @@ from src.td3 import TD3
 from src.pe_model import PE
 from src.fake_env import FakeEnv
 
+class RandomDistNetwork:
+    def __init__(self, in_dim):
+        self.model = tf.keras.models.Sequential(
+            [tf.keras.layers.Dense(8, input_dim = in_dim, activation = 'relu'),
+            tf.keras.layers.Dense(28, activation='relu'),
+            tf.keras.layers.Dense(128, activation='linear')])
+        
+        opt = tf.keras.optimizers.Adam()
+
+        self.model.compile(
+            optimizer=opt,
+            loss='mse',
+            metrics=['accuracy']
+        )
+    def call(self, state):
+        return self.model(state)
+    
+    def train(self, state, target_f):
+        # state is a batch, target_f is output of fixed on state
+        self.model.train(state, target_f)
+
 
 class MBPO:
     '''
@@ -54,7 +75,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "param" # where we'll change 
+        self.explore = "iid" # where we'll change 
         self.iid_sigma = 0.3
         
         self.corr_sigma = 0.2
@@ -166,26 +187,32 @@ class MBPO:
         self.replay_buffer_Env = ReplayBuffer(state_dim, action_dim)
         self.replay_buffer_Model = ReplayBuffer(state_dim, action_dim)
 
+        if self.explore == "dist":
+            # init random dist. models
+            self.fixed_network = RandomDistNetwork(self.state_dim)
+            self.predictor_nework = RandomDistNetwork(self.state_dim) # f-hat 
+
 
     def get_action_policy(self, state):
         '''
             Adds exploration noise to an action returned by the TD3 actor.
         '''
         if self.explore == "iid":
-            action = (self.policy.select_action(np.array(state)) + self.iid_sigma * np.random.normal(0, 1,size=self.action_dim)).clip(-self.max_action, self.max_action)
+            action = (self.policy.select_action(np.array(state)) + self.iid_sigma * np.random.normal(0, 1, size=self.action_dim)).clip(-self.max_action, self.max_action)
         
         if self.explore == "corr":  
-            
             z = np.random.normal(0, 1, size = self.action_dim)
             ou_noise = self.prev_noise + self.theta * self.prev_noise * self.delta_t + self.corr_sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
             action = (self.policy.select_action(np.array(state)) + ou_noise).clip(-self.max_action, self.max_action)
             self.prev_noise = ou_noise
         
-        if self.explore == "param":   
+        if self.explore == "param":    
             state = tf.convert_to_tensor(np.array(state).reshape(1, -1))
             state = tf.cast(state, dtype = "float32")
             action = (self.policy.actor_perturb(state).numpy().flatten()).clip(-self.max_action, self.max_action)
         
+        if self.explore == "dist":
+            action = self.policy.select_action(np.array(state)).clip(-self.max_action, self.max_action)
         return action
 
     def get_action_policy_batch(self, state):
@@ -330,7 +357,8 @@ class MBPO:
             Main training loop for both TD3 and MBPO. See Figure 2 in writeup.
         '''
         E = 1000
-        avg_training_rewards = np.zeros(E)
+        # avg_training_rewards = np.zeros(E)
+        training_rewards = np.zeros((3, E)) # 2D array, num episode cols num seeds rows
         for seed in range(3): # 3 seeds
             print(seed)
             self.seed += seed
@@ -352,7 +380,6 @@ class MBPO:
             episode_num = 0
 
             
-            training_rewards = np.zeros(E)
             t = 0
             
             if self.explore == "corr":
@@ -389,6 +416,13 @@ class MBPO:
                 new_state, reward, done, _ = env.step(action)
                 episode_reward+= reward
                 # Store data in replay buffer
+                if self.explore == "dist":
+                    # add noise to reward
+                    f_hat_pred = self.predictor_nework.call(new_state)
+                    f_pred = self.fixed_network.call(new_state)
+                    i_t = tf.math.reduce_sum(tf.math.squared_difference(f_hat_pred, f_pred), [0,1]) ## ?? scalar?
+                    reward = reward + i_t
+
                 self.replay_buffer_Env.add(state, action, new_state, reward, done)
                 state = new_state
 
@@ -404,6 +438,9 @@ class MBPO:
                     else: # TD3
                         state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
                         self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
+                        if self.explore == "dist":
+                            output_f = self.fixed_network.call(state_t) 
+                            self.predictor_nework.train(state_t, output_f) # train f-hat 
 
 
                 
@@ -413,8 +450,7 @@ class MBPO:
                     print("REWARD:", reward)
                     # +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
                     print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
-                    
-                    training_rewards[episode_num] = episode_reward
+                    training_rewards[seed, episode_num] = episode_reward
                     
                     # Reset environment
                     if self.explore == "corr":
@@ -447,13 +483,19 @@ class MBPO:
                 #     np.save(f"./results/{self.file_name}", evaluations)
                 #     if self.save_model:
                 #         self.policy.save(f"./models/{self.file_name}")
-            avg_training_rewards += training_rewards
+        print(training_rewards)
+        avg_training_rewards = np.mean(training_rewards, axis = 0) # get column averages 
         print("now plot")
         print("avg training rewards", avg_training_rewards)
-        avg_training_rewards /= 3
+        # avg_training_rewards /= 3
         
         plt.figure(figsize=(12, 8))
-        plt.plot([i for i in range(len(avg_training_rewards))], avg_training_rewards)
+        # linestyles = ['--', '-.', ':']
+        for s in range(3):
+            plt.plot([i for i in range(E)], training_rewards[s,], label = "Seed %s" % s, linewidth = 2)
+        print("ave line")
+        plt.plot([i for i in range(E)], avg_training_rewards, label = "Average", alpha = .3, color = "k")
+        plt.legend(loc = "upper left")
         plt.xlabel("Episode Num")
         plt.ylabel("Average training reward")
         plt.title("MountainCarContinuous-v0, Exploration type: %s" % self.explore)
