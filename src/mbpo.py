@@ -75,7 +75,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "dist" # where we'll change 
+        self.explore = "param" # where we'll change 
         self.iid_sigma = 0.3
         
         self.corr_sigma = 0.2
@@ -202,7 +202,7 @@ class MBPO:
         
         if self.explore == "corr":  
             z = np.random.normal(0, 1, size = self.action_dim)
-            ou_noise = self.prev_noise + self.theta * self.prev_noise * self.delta_t + self.corr_sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
+            ou_noise = self.prev_noise - self.theta * self.prev_noise * self.delta_t + self.corr_sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
             action = (self.policy.select_action(np.array(state)) + ou_noise).clip(-self.max_action, self.max_action)
             self.prev_noise = ou_noise
         
