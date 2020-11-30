@@ -35,6 +35,9 @@ class RandomDistNetwork:
     def call(self, state):
         return self.model(np.asmatrix(state))
     
+    def call_batch(self, state):
+        return self.model.predict(np.asmatrix(state))
+
     def train(self, state, target_f):
         # state is a batch, target_f is output of fixed on state
         self.model.train_on_batch(state, target_f)
@@ -202,7 +205,7 @@ class MBPO:
         
         if self.explore == "corr":  
             z = np.random.normal(0, 1, size = self.action_dim)
-            ou_noise = self.prev_noise + self.theta * self.prev_noise * self.delta_t + self.corr_sigma * math.sqrt(self.delta_t) * z # neg in  second term cancels (mu = 0) 
+            ou_noise = self.prev_noise - self.theta * self.prev_noise * self.delta_t + self.corr_sigma * math.sqrt(self.delta_t) * z # fixed sign # neg in  second term cancels (mu = 0) 
             action = (self.policy.select_action(np.array(state)) + ou_noise).clip(-self.max_action, self.max_action)
             self.prev_noise = ou_noise
         
@@ -439,7 +442,7 @@ class MBPO:
                         state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
                         self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
                         if self.explore == "dist":
-                            output_f = self.fixed_network.call(state_t) 
+                            output_f = self.fixed_network.call_batch(state_t) 
                             self.predictor_nework.train(state_t, output_f) # train f-hat 
 
 
