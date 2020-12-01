@@ -18,6 +18,14 @@ from src.td3 import TD3
 from src.pe_model import PE
 from src.fake_env import FakeEnv
 
+def distance(out_pi, out_pi_tilde):
+    # these are the outputs from our non-pertubred and perturbed policies
+    expected_over_s = tf.reduce_mean(tf.math.squared_difference(out_pi, out_pi_tilde), axis = 0) # row dimension
+    d = tf.math.sqrt(tf.math.reduce_mean(expected_over_s)) 
+    return d 
+
+    
+
 class RandomDistNetwork:
     def __init__(self, in_dim):
         self.model = tf.keras.models.Sequential(
@@ -78,7 +86,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "dist" # where we'll change 
+        self.explore = "iid" # where we'll change 
         self.iid_sigma = 0.3
         
         self.corr_sigma = 0.2
@@ -86,6 +94,7 @@ class MBPO:
         self.delta_t = 0.01 # corr
 
         self.param_sigma = 0.1
+        self.param_alpha = 1.01
 
         # Dynamics model parameters
         self.num_networks = model_kwargs["num_networks"] #number of networks in ensemble
@@ -366,6 +375,7 @@ class MBPO:
             print(seed)
             self.seed += seed
             self.init_models_and_buffer()
+            self.param_sigma = 0.1
             env = gym.make(self.env_name)
             # Set seeds
             env.seed(self.seed)
@@ -399,6 +409,7 @@ class MBPO:
                 #     layer.set_weights(w + noise)
                 noise = np.random.normal(size = old_weights.shape)
                 self.policy.actor_perturb.set_weights(old_weights + self.param_sigma * noise)
+
             while (episode_num < E):
             # for t in range(int(self.max_timesteps)):
                 
@@ -470,6 +481,17 @@ class MBPO:
                         #     layer.set_weights(w + noise)
                         noise = np.random.normal(size = old_weights.shape)
                         self.policy.actor_perturb.set_weights(old_weights + self.param_sigma * noise)
+                        state_in, _, _, _, _  = self.prepare_mixed_batch()
+                        pertub_out = self.policy.actor_perturb.predict(np.asmatrix(state_in.numpy()))
+                        out = self.policy.actor.predict(np.asmatrix(state_in.numpy()))
+                        d = distance(out, pertub_out)
+                        if d < self.param_sigma:
+                            self.param_sigma = self.param_alpha * self.param_sigma
+                        else:
+                            self.param_sigma = (1 / self.param_alpha) * self.param_sigma
+
+
+
                     state, done = env.reset(), False
                     episode_reward = 0
                     episode_timesteps = 0
@@ -495,7 +517,7 @@ class MBPO:
         plt.figure(figsize=(12, 8))
         # linestyles = ['--', '-.', ':']
         for s in range(3):
-            plt.plot([i for i in range(E)], training_rewards[s,], label = "Seed %s" % s, linewidth = 2)
+            plt.plot([i for i in range(E)], training_rewards[s,], label = "Seed %s" % s)
         print("ave line")
         plt.plot([i for i in range(E)], avg_training_rewards, label = "Average", alpha = .3, color = "k")
         plt.legend(loc = "upper left")
