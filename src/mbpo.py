@@ -86,7 +86,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "iid" # where we'll change 
+        self.explore = "param" # where we'll change 
 
         self.iid_sigma = 0.3
         
@@ -483,13 +483,14 @@ class MBPO:
                         noise = np.random.normal(size = old_weights.shape)
                         self.policy.actor_perturb.set_weights(old_weights + self.param_sigma * noise)
                         state_in, _, _, _, _  = self.prepare_mixed_batch()
-                        pertub_out = self.policy.actor_perturb.predict(np.asmatrix(state_in.numpy()))
-                        out = self.policy.actor.predict(np.asmatrix(state_in.numpy()))
+                        pertub_out = self.policy.actor_perturb.call(state_in)
+                        out = self.policy.actor.call(state_in)
                         d = distance(out, pertub_out)
                         if d < self.param_sigma:
                             self.param_sigma = self.param_alpha * self.param_sigma
                         else:
                             self.param_sigma = (1 / self.param_alpha) * self.param_sigma
+                        print("param sigma", self.param_sigma)
 
 
 
