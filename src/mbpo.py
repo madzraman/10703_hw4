@@ -86,7 +86,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "param" # where we'll change 
+        self.explore = "iid" # where we'll change 
 
         self.iid_sigma = 0.3
         
