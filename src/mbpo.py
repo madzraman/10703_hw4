@@ -12,11 +12,12 @@ import gym
 import matplotlib.pyplot as plt
 import copy
 import math
-
+import pickle 
 from src.utils import ReplayBuffer
 from src.td3 import TD3
 from src.pe_model import PE
 from src.fake_env import FakeEnv
+SEEDS = 6
 
 def distance(out_pi, out_pi_tilde):
     # these are the outputs from our non-pertubred and perturbed policies
@@ -86,11 +87,11 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "iid" # where we'll change 
+        self.explore = "param" # where we'll change 
 
-        self.iid_sigma = 0.3
+        self.iid_sigma = 0.8
         
-        self.corr_sigma = 0.2
+        self.corr_sigma = 0.5
         self.theta = 0.15 # corr
         self.delta_t = 0.01 # corr
 
@@ -371,8 +372,8 @@ class MBPO:
         '''
         E = 1000
         # avg_training_rewards = np.zeros(E)
-        training_rewards = np.zeros((3, E)) # 2D array, num episode cols num seeds rows
-        for seed in range(3): # 3 seeds
+        training_rewards = np.zeros((SEEDS, E)) # 2D array, num episode cols num seeds rows
+        for seed in range(SEEDS): # 3 seeds
             print(seed)
             self.seed += seed
             self.init_models_and_buffer()
@@ -423,8 +424,8 @@ class MBPO:
                     action = self.get_action_policy(state)
                     # Perform model rollout and model training at appropriate timesteps 
                     if ((t-self.start_timesteps) % self.model_update_freq == 0) and self.enable_MBPO: # want to run at beginning 
-                            self.model.train(self.replay_buffer_Env)
-                            self.model_rollout()
+                        self.model.train(self.replay_buffer_Env)
+                        sself.model_rollout()
     
 
                 # Perform action 
@@ -453,13 +454,13 @@ class MBPO:
                     else: # TD3
                         state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
                         self.policy.train_on_batch(state_t, action_t, next_state_t, reward_t, not_done_t)
-                        if self.explore == "dist":
-                            output_f = self.fixed_network.call_batch(state_t) 
-                            self.predictor_nework.train(state_t, output_f) # train f-hat 
+                if (t % 30 == 0) and (self.explore == "dist"): # use 30 real env timesteps 
+                    state_t, action_t, next_state_t, reward_t, not_done_t  = self.prepare_mixed_batch()
+                    output_f = self.fixed_network.call_batch(state_t) 
+                    self.predictor_nework.train(state_t, output_f) # train f-hat
 
 
-                
-                
+            
 
                 if done:
                     print("REWARD:", reward)
@@ -470,6 +471,7 @@ class MBPO:
                     # Reset environment
                     if self.explore == "corr":
                         self.prev_noise = np.random.normal(self.action_dim) 
+                        self.corr_sigma = 0.2
                     if self.explore == "param":
                         self.policy.actor_perturb = copy.deepcopy(self.policy.actor)
                         old_weights = np.array(self.policy.actor.trainable_weights)
@@ -483,22 +485,22 @@ class MBPO:
                         noise = np.random.normal(size = old_weights.shape)
                         self.policy.actor_perturb.set_weights(old_weights + self.param_sigma * noise)
                         state_in, _, _, _, _  = self.prepare_mixed_batch()
-                        pertub_out = self.policy.actor_perturb.predict(np.asmatrix(state_in.numpy()))
-                        out = self.policy.actor.predict(np.asmatrix(state_in.numpy()))
+                        pertub_out = self.policy.actor_perturb.call(state_in)
+                        out = self.policy.actor.call(state_in)
                         d = distance(out, pertub_out)
                         if d < self.param_sigma:
                             self.param_sigma = self.param_alpha * self.param_sigma
                         else:
                             self.param_sigma = (1 / self.param_alpha) * self.param_sigma
 
-
-
                     state, done = env.reset(), False
                     episode_reward = 0
                     episode_timesteps = 0
                     episode_num += 1
 
-                t += 1
+                t+=1
+            with open('rewards_%s_' %seed + self.explore+".pickle" , 'wb') as f:
+                pickle.dump(training_rewards[seed,], f)
                 # Evaluate episode (from HW 4)
                 # if (t + 1) % self.eval_freq == 0:
                 #     evaluations.append(self.eval_policy())
@@ -509,6 +511,7 @@ class MBPO:
                 #     np.save(f"./results/{self.file_name}", evaluations)
                 #     if self.save_model:
                 #         self.policy.save(f"./models/{self.file_name}")
+            
         print(training_rewards)
         avg_training_rewards = np.mean(training_rewards, axis = 0) # get column averages 
         print("now plot")
@@ -517,7 +520,7 @@ class MBPO:
         
         plt.figure(figsize=(12, 8))
         # linestyles = ['--', '-.', ':']
-        for s in range(3):
+        for s in range(SEEDS):
             plt.plot([i for i in range(E)], training_rewards[s,], label = "Seed %s" % s)
         print("ave line")
         plt.plot([i for i in range(E)], avg_training_rewards, label = "Average", alpha = .3, color = "k")
