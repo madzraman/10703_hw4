@@ -89,9 +89,9 @@ class MBPO:
 
         self.explore = "corr" # where we'll change 
 
-        self.iid_sigma = 0.8
+        self.iid_sigma = 0.3 #0.8
         
-        self.corr_sigma = 0.5
+        self.corr_sigma = 0.2 #0.5
         self.theta = 0.15 # corr
         self.delta_t = 0.01 # corr
 
