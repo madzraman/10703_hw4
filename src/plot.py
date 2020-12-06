@@ -4,13 +4,13 @@ import matplotlib.pyplot as plt
 E = 1000
 
 training_rewards = np.zeros((3, E))
-with open("rewards_0_param.pickle", 'rb') as fp:
+with open("rewards_0.pickle", 'rb') as fp:
     seed0 = pickle.load(fp)
 training_rewards[0,] = seed0
-with open("rewards_1_param.pickle", 'rb') as fp:
+with open("rewards_1.pickle", 'rb') as fp:
     seed1 = pickle.load(fp)
 training_rewards[1,] = seed1
-with open("rewards_2_param.pickle", 'rb') as fp:
+with open("rewards_2.pickle", 'rb') as fp:
     seed2 = pickle.load(fp)
 training_rewards[2,] = seed2
 
@@ -27,6 +27,6 @@ print("ave line")
 plt.plot([i for i in range(E)], avg_training_rewards, label = "Average", alpha = .3, color = "k")
 plt.legend(loc = "upper left")
 plt.xlabel("Episode Num")
-plt.ylabel("Average training reward")
+plt.ylabel("Training Reward")
 plt.title("MountainCarContinuous-v0, Exploration type: RND")
-plt.savefig(("MountainCarContinuous-v0_RND") + ".png", dpi = 300)
+plt.savefig(("dist") + ".png", dpi = 300)

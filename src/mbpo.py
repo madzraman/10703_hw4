@@ -17,7 +17,7 @@ from src.utils import ReplayBuffer
 from src.td3 import TD3
 from src.pe_model import PE
 from src.fake_env import FakeEnv
-SEEDS = 6
+SEEDS = 3
 
 def distance(out_pi, out_pi_tilde):
     # these are the outputs from our non-pertubred and perturbed policies
@@ -87,7 +87,7 @@ class MBPO:
         self.noise_clip = TD3_kwargs["noise_clip"] #c in Target Policy Smoothing
         self.policy_freq = TD3_kwargs["policy_freq"] #d in TD3 pseudocode
 
-        self.explore = "param" # where we'll change 
+        self.explore = "corr" # where we'll change 
 
         self.iid_sigma = 0.8
         
@@ -425,7 +425,7 @@ class MBPO:
                     # Perform model rollout and model training at appropriate timesteps 
                     if ((t-self.start_timesteps) % self.model_update_freq == 0) and self.enable_MBPO: # want to run at beginning 
                         self.model.train(self.replay_buffer_Env)
-                        sself.model_rollout()
+                        self.model_rollout()
     
 
                 # Perform action 
